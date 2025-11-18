@@ -1,0 +1,17 @@
+# Sistema de Otimização de Cozinha Industrial
+# Dependências Python
+
+# Framework Web
+streamlit>=1.28.0
+
+# Computação Científica
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Visualizações
+plotly>=5.17.0
+
+# Utilitários (já incluídos no Python)
+# - dataclasses (Python 3.7+)
+# - typing (Python 3.5+)
+# - enum (Python 3.4+)

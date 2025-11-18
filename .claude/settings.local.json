@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python src/simplex.py:*)",
+      "Bash(python:*)",
+      "Bash(source:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_run_code",
+      "mcp__playwright__browser_snapshot"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
