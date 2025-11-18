@@ -1,25 +1,24 @@
-# Planejamento de Dieta com Restrições Nutricionais
+# Sistema de Otimização de Cozinha Industrial
 
-Mockup funcional em Python + Qt (PySide6) para otimização de dieta usando programação linear.
+Aplicação em Streamlit para otimizar a produção de refeições em cozinhas industriais
+via programação linear. O modelo minimiza o custo de recursos (gás, energia e água)
+respeitando demandas mínimas e capacidades de fogão, forno e equipe por período.
 
-## Requisitos funcionais
-- Cadastro interno de alimentos em tabela editável.
-- Definição de metas nutricionais mínimas (calorias, proteína, carboidrato, vitaminas).
-- Botão para calcular dieta otimizada, exibindo porções ideais e custo mínimo.
-- Validação de campos vazios e alerta para instâncias inviáveis.
+## Funcionalidades
+- Cadastro de pratos com demandas e consumos de recursos.
+- Definição de períodos com capacidades por turno.
+- Configuração de custos unitários.
+- Execução do algoritmo Simplex (implementação própria) para encontrar o cronograma
+  de produção de menor custo.
+- Visualizações interativas em Plotly: cronograma, uso de recursos e custos.
+- Dados de exemplo pré-carregados conforme PRD.
 
 ## Execução local
-Instale apenas as dependências necessárias:
+Instale as dependências e execute o Streamlit:
 
 ```bash
-pip install PySide6
-pip install pulp
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-Depois, execute a aplicação:
-
-```bash
-python main.py
-```
-
-A interface apresenta painel superior para cadastro e metas, e painel inferior com botão de cálculo e área de resultados (tabela de porções, custo total e resumo de nutrientes alcançados).
+Abra o endereço indicado pelo Streamlit no navegador para interagir com a interface.
