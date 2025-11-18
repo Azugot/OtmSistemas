@@ -1,183 +1,173 @@
-"""Simplex algorithm with two-phase approach for small LP instances.
-
-The solver supports minimization problems with mixed inequality constraints
-by converting them to standard form and applying the simplex tableau method.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Sequence
-
-import numpy as np
-
-
-class InfeasibleProblem(Exception):
-    """Raised when the LP is infeasible."""
-
-
-class UnboundedProblem(Exception):
-    """Raised when the LP is unbounded."""
+from typing import List, Sequence, Tuple
 
 
 @dataclass
-class StandardForm:
-    tableau: np.ndarray
-    basis: List[int]
-    var_names: List[str]
-    decision_vars: int
-    artificial_vars: List[int]
-    objective: np.ndarray
+class SimplexResult:
+    status: str
+    objective_value: float | None
+    solution: List[float] | None
 
 
-class SimplexSolver:
-    """Solve linear programs using the two-phase simplex method."""
+class TwoPhaseSimplex:
+    def __init__(self, c: Sequence[float], A: Sequence[Sequence[float]], b: Sequence[float], signs: Sequence[str]):
+        self.c = list(c)
+        self.A = [list(row) for row in A]
+        self.b = list(b)
+        self.signs = list(signs)
+        self.tableau: List[List[float]] = []
+        self.basis: List[int] = []
+        self.artificial_vars: List[int] = []
 
-    def solve(
-        self, c: Sequence[float], A: Sequence[Sequence[float]], b: Sequence[float], signs: Sequence[str]
-    ) -> np.ndarray:
-        """Solve a minimization problem returning the decision variable values.
+    def _pad_columns(self, width: int) -> None:
+        for row in self.tableau:
+            while len(row) < width:
+                row.insert(len(row) - 1, 0.0)
 
-        Args:
-            c: Coefficients of the objective function (minimization).
-            A: Constraint coefficient matrix.
-            b: Right-hand side vector.
-            signs: Constraint signs ("<=", ">=", "=").
-        """
+    def _append_column(self) -> int:
+        new_index = len(self.tableau[0]) - 1
+        self._pad_columns(new_index + 2)
+        return new_index
 
-        standard = self._to_standard_form(c, A, b, signs)
-        tableau, basis = self._phase_one(standard)
-        solution = self._phase_two(standard, tableau, basis)
-        return solution
+    def _to_standard_form(self) -> None:
+        self.tableau = []
+        self.basis = []
+        self.artificial_vars = []
 
-    def _to_standard_form(
-        self,
-        c: Sequence[float],
-        A: Sequence[Sequence[float]],
-        b: Sequence[float],
-        signs: Sequence[str],
-    ) -> StandardForm:
-        A = np.array(A, dtype=float)
-        b = np.array(b, dtype=float)
-        c = np.array(c, dtype=float)
-        num_constraints, num_vars = A.shape
+        num_vars = len(self.c)
+        for coefficients, sign, rhs in zip(self.A, self.signs, self.b):
+            row = list(coefficients)
+            b_value = rhs
+            inequality = sign
 
-        var_names: List[str] = [f"x{i+1}" for i in range(num_vars)]
-        basis: List[int] = []
-        artificial_vars: List[int] = []
+            if b_value < 0:
+                row = [-val for val in row]
+                b_value = -b_value
+                if inequality == '<=':
+                    inequality = '>='
+                elif inequality == '>=':
+                    inequality = '<='
 
-        rows: List[List[float]] = []
-        for i in range(num_constraints):
-            row = list(A[i]) + [0.0] * (len(var_names) - num_vars)
-            sign = signs[i]
-            if sign == "<=":
-                for prev in rows:
-                    prev.append(0.0)
-                row.append(1.0)
-                basis.append(len(var_names))
-                var_names.append(f"s{i+1}")
-            elif sign == ">=":
-                for prev in rows:
-                    prev.append(0.0)
-                row.append(-1.0)
-                var_names.append(f"e{i+1}")
-                for prev in rows:
-                    prev.append(0.0)
-                art_col = len(var_names)
-                row.append(1.0)
-                basis.append(art_col)
-                var_names.append(f"a{i+1}")
-                artificial_vars.append(art_col)
+            if not self.tableau:
+                self.tableau = [[0.0 for _ in range(num_vars)] + [b_value]]
+            else:
+                row += [0.0] * (len(self.tableau[0]) - 1 - len(row))
+                self.tableau.append(row + [b_value])
+
+            current_index = len(self.tableau) - 1
+            if len(self.tableau) <= 1:
+                self.tableau[0] = row + [b_value]
+
+            if inequality == '<=':
+                slack_col = self._append_column()
+                self.tableau[current_index][slack_col] = 1.0
+                self.basis.append(slack_col)
+            elif inequality == '>=':
+                surplus_col = self._append_column()
+                self.tableau[current_index][surplus_col] = -1.0
+
+                artificial_col = self._append_column()
+                for r_idx, r in enumerate(self.tableau):
+                    r[artificial_col] = 1.0 if r_idx == current_index else 0.0
+                self.basis.append(artificial_col)
+                self.artificial_vars.append(artificial_col)
             else:  # equality
-                for prev in rows:
-                    prev.append(0.0)
-                row.append(1.0)
-                art_col = len(var_names)
-                basis.append(art_col)
-                var_names.append(f"a{i+1}")
-                artificial_vars.append(art_col)
-            rows.append(row)
+                artificial_col = self._append_column()
+                for r_idx, r in enumerate(self.tableau):
+                    r[artificial_col] = 1.0 if r_idx == current_index else 0.0
+                self.basis.append(artificial_col)
+                self.artificial_vars.append(artificial_col)
 
-        max_cols = max(len(r) for r in rows)
-        normalized_rows = [r + [0.0] * (max_cols - len(r)) + [b[i]] for i, r in enumerate(rows)]
-        tableau = np.array(normalized_rows, dtype=float)
+    def _build_objective_row(self, costs: List[float]) -> List[float]:
+        width = len(self.tableau[0])
+        costs += [0.0] * (width - 1 - len(costs))
+        obj_row = [-c for c in costs] + [0.0]
+        for row, basic in zip(self.tableau, self.basis):
+            c_basic = costs[basic]
+            if c_basic != 0:
+                for j in range(width):
+                    obj_row[j] += c_basic * row[j]
+        return obj_row
 
-        objective = np.concatenate([c, [0.0] * (tableau.shape[1] - len(c))])
+    def _pivot(self, row_idx: int, col_idx: int) -> None:
+        pivot_val = self.tableau[row_idx][col_idx]
+        if abs(pivot_val) < 1e-12:
+            raise ZeroDivisionError("Pivot value is too small")
 
-        decision_vars = num_vars
-        return StandardForm(
-            tableau=tableau,
-            basis=basis,
-            var_names=var_names,
-            decision_vars=decision_vars,
-            artificial_vars=artificial_vars,
-            objective=objective,
-        )
+        self.tableau[row_idx] = [v / pivot_val for v in self.tableau[row_idx]]
+        for r_idx, row in enumerate(self.tableau):
+            if r_idx == row_idx:
+                continue
+            factor = row[col_idx]
+            if factor != 0:
+                self.tableau[r_idx] = [row_val - factor * self.tableau[row_idx][c_idx] for c_idx, row_val in enumerate(row)]
+        self.basis[row_idx] = col_idx
 
-    def _phase_one(self, standard: StandardForm):
-        tableau = standard.tableau.copy()
-        rows, cols = tableau.shape
-        obj = np.zeros(cols)
+    def _simplex(self, costs: List[float]) -> Tuple[bool, List[List[float]]]:
+        obj_row = self._build_objective_row(costs)
+        self.tableau.append(obj_row)
 
-        for art_idx in standard.artificial_vars:
-            obj[art_idx] = -1.0
+        num_rows = len(self.tableau)
+        num_cols = len(self.tableau[0]) - 1
 
-        tableau = np.vstack([tableau, obj])
-
-        for i, var in enumerate(standard.basis):
-            if var in standard.artificial_vars:
-                tableau[-1] += tableau[i]
-
-        tableau = self._simplex(tableau, standard.basis)
-
-        if abs(tableau[-1, -1]) > 1e-7:
-            raise InfeasibleProblem("Não foi encontrada solução viável.")
-
-        return tableau[:-1], standard.basis
-
-    def _phase_two(self, standard: StandardForm, tableau: np.ndarray, basis: List[int]) -> np.ndarray:
-        rows, cols = tableau.shape
-        objective = np.zeros(cols)
-        for j in range(standard.decision_vars):
-            objective[j] = -standard.objective[j] if j < len(standard.objective) else 0.0
-
-        full_tableau = np.vstack([tableau, objective])
-
-        for i, var in enumerate(basis):
-            coeff = full_tableau[-1, var]
-            if abs(coeff) > 1e-9:
-                full_tableau[-1] -= coeff * full_tableau[i]
-
-        full_tableau = self._simplex(full_tableau, basis)
-
-        solution = np.zeros(standard.decision_vars)
-        for i, var in enumerate(basis):
-            if var < standard.decision_vars:
-                solution[var] = full_tableau[i, -1]
-        return solution
-
-    def _simplex(self, tableau: np.ndarray, basis: List[int]) -> np.ndarray:
-        rows, cols = tableau.shape
         while True:
-            objective = tableau[-1, :-1]
-            entering = int(np.argmax(objective))
-            if objective[entering] <= 1e-9:
-                break
+            obj = self.tableau[-1]
+            entering_col, max_coeff = max(((j, coeff) for j, coeff in enumerate(obj[:-1])), key=lambda t: t[1])
+            if max_coeff <= 1e-9:
+                return True, self.tableau
 
             ratios = []
-            for i in range(rows - 1):
-                if tableau[i, entering] > 1e-9:
-                    ratios.append(tableau[i, -1] / tableau[i, entering])
-                else:
-                    ratios.append(np.inf)
-            leaving_row = int(np.argmin(ratios))
-            if ratios[leaving_row] == np.inf:
-                raise UnboundedProblem("Problema ilimitado.")
+            for i in range(num_rows - 1):
+                coeff = self.tableau[i][entering_col]
+                if coeff > 1e-9:
+                    ratios.append((self.tableau[i][-1] / coeff, i))
+            if not ratios:
+                return False, self.tableau
 
-            pivot = tableau[leaving_row, entering]
-            tableau[leaving_row] = tableau[leaving_row] / pivot
-            for i in range(rows):
-                if i != leaving_row:
-                    tableau[i] -= tableau[i, entering] * tableau[leaving_row]
-            basis[leaving_row] = entering
+            _, pivot_row = min(ratios)
+            self._pivot(pivot_row, entering_col)
 
-        return tableau
+    def solve(self) -> SimplexResult:
+        self._to_standard_form()
+        phase_one_costs = [1.0 if idx in self.artificial_vars else 0.0 for idx in range(len(self.tableau[0]) - 1)]
+        feasible, tableau = self._simplex(phase_one_costs)
+        if not feasible or (-tableau[-1][-1]) > 1e-7:
+            return SimplexResult(status="Problema inviável", objective_value=None, solution=None)
+
+        for col in sorted(self.artificial_vars, reverse=True):
+            for row in self.tableau:
+                del row[col]
+        self.c += [0.0] * (len(self.tableau[0]) - 1 - len(self.c))
+        self.tableau.pop()
+        self.basis = [b - sum(1 for a in self.artificial_vars if a < b) for b in self.basis]
+
+        feasible, tableau = self._simplex(self.c)
+        if not feasible:
+            return SimplexResult(status="Problema inviável", objective_value=None, solution=None)
+
+        solution = [0.0 for _ in range(len(self.tableau[0]) - 1)]
+        for row_idx, basic_col in enumerate(self.basis):
+            solution[basic_col] = self.tableau[row_idx][-1]
+
+        optimal_value = self.tableau[-1][-1] * -1
+        return SimplexResult(status="Ótimo encontrado", objective_value=optimal_value, solution=solution)
+
+
+def _example() -> SimplexResult:
+    c = [3.0, 2.0]
+    A = [
+        [1.0, -1.0],
+        [-1.0, -1.0],
+    ]
+    b = [0.0, -4.0]
+    signs = ['>=', '=']
+
+    simplex = TwoPhaseSimplex(c, A, b, signs)
+    return simplex.solve()
+
+
+if __name__ == "__main__":
+    result = _example()
+    print(result)
