@@ -86,7 +86,8 @@ st.markdown('<p class="sub-header">Minimize recursos, maximize eficiência usand
 # SIDEBAR
 # =====================
 with st.sidebar:
-    st.image("https://via.placeholder.com/300x100/1E3A8A/FFFFFF?text=OptiChef", use_container_width=True)
+    st.markdown("### 🍳 OptiChef")
+    st.caption("Sistema de Otimização")
     st.markdown("---")
 
     st.header("💰 Custos Unitários")
