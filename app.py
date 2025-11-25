@@ -302,7 +302,7 @@ with st.sidebar:
     st.markdown("---")
 
     st.caption("📘 Trabalho de Programação Linear")
-    st.caption("🎓 Sistemas Operacionais - PUC")
+    st.caption("🎓 Otimização de Sistemas - PUC")
     st.caption("👨‍💻 Victor Colen")
 
 # =====================
