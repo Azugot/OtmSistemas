@@ -129,10 +129,91 @@ with st.sidebar:
 
     st.header("📋 Ações Rápidas")
 
+    # Botão principal para dados padrão do usuário
+    if st.button("📊 Carregar Dados Padrão", type="primary", use_container_width=True):
+        # Dados padrão do usuário
+        default_dishes_data = [
+            {"name": "Arroz branco", "water": 0.5, "demand": 50, "gas": 0.02, "stove": 5, "electricity": 0.01, "oven": 0, "prep": 3},
+            {"name": "Feijão cozido", "water": 0.7, "demand": 40, "gas": 0.03, "stove": 15, "electricity": 0.01, "oven": 0, "prep": 5},
+            {"name": "Frango assado", "water": 0.3, "demand": 30, "gas": 0.01, "stove": 10, "electricity": 0.15, "oven": 40, "prep": 8},
+            {"name": "Macarrão ao sugo", "water": 0.4, "demand": 35, "gas": 0.02, "stove": 8, "electricity": 0.02, "oven": 0, "prep": 4},
+            {"name": "Legumes grelhados", "water": 0.2, "demand": 25, "gas": 0.01, "stove": 6, "electricity": 0.03, "oven": 10, "prep": 5},
+            {"name": "Lasanha de carne", "water": 0.35, "demand": 20, "gas": 0.01, "stove": 10, "electricity": 0.18, "oven": 35, "prep": 10},
+            {"name": "Sopa de legumes", "water": 0.6, "demand": 30, "gas": 0.02, "stove": 12, "electricity": 0.02, "oven": 0, "prep": 6},
+            {"name": "Peixe grelhado", "water": 0.25, "demand": 20, "gas": 0.02, "stove": 9, "electricity": 0.05, "oven": 15, "prep": 7},
+            {"name": "Purê de batatas", "water": 0.3, "demand": 30, "gas": 0.01, "stove": 7, "electricity": 0.01, "oven": 0, "prep": 4},
+            {"name": "Salada mista", "water": 0.1, "demand": 40, "gas": 0, "stove": 0, "electricity": 0, "oven": 0, "prep": 3},
+        ]
+
+        # Cria os pratos
+        default_dishes = [
+            Dish(
+                name=d["name"],
+                demand=d["demand"],
+                stove_time=d["stove"],
+                oven_time=d["oven"],
+                water_consumption=d["water"],
+                gas_consumption=d["gas"],
+                electricity_consumption=d["electricity"],
+                prep_time=d["prep"]
+            )
+            for d in default_dishes_data
+        ]
+
+        # Períodos padrão
+        default_periods = [
+            Period(name="Manhã (6h-12h)", stove_capacity=240, oven_capacity=180, team_capacity=720),
+            Period(name="Tarde (12h-18h)", stove_capacity=300, oven_capacity=240, team_capacity=900),
+            Period(name="Noite (18h-22h)", stove_capacity=180, oven_capacity=120, team_capacity=480)
+        ]
+
+        # Configura o otimizador
+        st.session_state.optimizer = KitchenOptimizer()
+        st.session_state.optimizer.add_dishes(default_dishes)
+        st.session_state.optimizer.add_periods(default_periods)
+        st.session_state.optimizer.set_costs(ResourceCosts(
+            gas_price=gas_price,
+            electricity_price=electricity_price,
+            water_price=water_price
+        ))
+
+        # Cria DataFrames para exibição
+        st.session_state.dishes_df = pd.DataFrame([
+            {
+                'Prato': d.name,
+                'Demanda': d.demand,
+                'Fogão (min)': d.stove_time,
+                'Forno (min)': d.oven_time,
+                'Água (L)': d.water_consumption,
+                'Gás (m³)': d.gas_consumption,
+                'Energia (kWh)': d.electricity_consumption,
+                'Equipe (min)': d.prep_time
+            }
+            for d in default_dishes
+        ])
+
+        st.session_state.periods_df = pd.DataFrame([
+            {
+                'Período': p.name,
+                'Fogão (min)': p.stove_capacity,
+                'Forno (min)': p.oven_capacity,
+                'Equipe (min-pessoa)': p.team_capacity
+            }
+            for p in default_periods
+        ])
+
+        st.session_state.solution = None
+        st.session_state.optimization_result = None
+
+        st.success("✅ Dados padrão carregados! (10 pratos, 3 períodos)")
+        st.rerun()
+
+    st.markdown("---")
+    st.caption("Outros exemplos:")
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("📥 Carregar Exemplo Completo", use_container_width=True):
+        if st.button("📥 Completo (15)", use_container_width=True):
             # Carrega dados de exemplo
             st.session_state.optimizer = KitchenOptimizer()
             st.session_state.optimizer.add_dishes(get_example_dishes())
@@ -164,11 +245,11 @@ with st.sidebar:
                 for p in get_example_periods()
             ])
 
-            st.success("✅ Exemplo completo carregado com 15 pratos e 3 períodos!")
+            st.success("✅ Exemplo completo carregado! (15 pratos, 3 períodos)")
             st.rerun()
 
     with col2:
-        if st.button("🧪 Carregar Exemplo Simples", use_container_width=True):
+        if st.button("🧪 Simples (3)", use_container_width=True):
             # Carrega exemplo pequeno
             dishes, periods, costs = get_small_example()
 
@@ -201,7 +282,7 @@ with st.sidebar:
                 for p in periods
             ])
 
-            st.success("✅ Exemplo simples carregado com 3 pratos e 2 períodos!")
+            st.success("✅ Exemplo simples carregado! (3 pratos, 2 períodos)")
             st.rerun()
 
     if st.button("🗑️ Limpar Tudo", type="secondary", use_container_width=True):
